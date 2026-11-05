@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>PDF Koubou — document and eraser</title>
+  <desc>A folded document with an overlapping eraser. Three solid colours on a transparent background.</desc>
+  <!-- Palette: deep teal #193F49, warm paper #F4F3EA, muted gold #D7AC67.
+       No fonts, embedded bitmaps, filters or external resources.
+       For 16/24/32 px exports, increase outline widths from 10 to 14/12/11;
+       at 16 px omit the lower document line and widen the upper line to 16. -->
+  <g stroke="#193F49" stroke-width="10" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Document silhouette and folded upper-right corner. -->
+    <path id="paper" fill="#F4F3EA" d="M48 20 H144 L192 68 V224 Q192 236 180 236 H48 Q36 236 36 224 V32 Q36 20 48 20 Z"/>
+    <path id="fold" fill="#D7AC67" d="M144 20 V56 Q144 68 156 68 H192 Z"/>
+    <!-- Broad, widely spaced marks remain legible at taskbar sizes. -->
+    <path id="line-top" fill="none" d="M68 108 H144"/>
+    <path id="line-bottom" fill="none" d="M68 144 H120"/>
+    <!-- The cream erasing end and gold sleeve form one substantial tool. -->
+    <g id="eraser" transform="rotate(-45 180 180)">
+      <rect x="120" y="152" width="124" height="56" rx="10" fill="#D7AC67"/>
+      <path fill="#F4F3EA" d="M164 152 V208 H130 Q120 208 120 198 V162 Q120 152 130 152 Z"/>
+    </g>
+  </g>
+</svg>

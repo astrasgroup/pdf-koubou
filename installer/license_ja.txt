@@ -1,0 +1,31 @@
+﻿PDF工房 の利用条件
+Copyright (C) 2026 Astras Group
+
+1. 無料で使えます
+PDF工房 は無料のソフトウェアです。個人・学校・塾・会社など、どなたでも無料で使えます。
+
+2. ライセンス（AGPL-3.0）
+PDF工房 は GNU Affero General Public License v3.0（AGPL-3.0）で公開しています。
+- 自由に使う、コピーして配る、改変することができます。
+- 改変したものを配る場合や、ネットワーク越しに使わせる場合は、そのソースコードも同じライセンスで公開する必要があります。
+- ソースコードは、配布物に同梱の「PDF工房_ソースコード_<版>.zip」にあります。
+- ライセンスの本文（英語）と、使用している部品のライセンスは、インストール先の licenses フォルダにあります。
+
+3. 保証はありません
+PDF工房 は無保証で提供します。使用によって生じた損害（ファイルの破損や消失を含みます）について、作者は責任を負いません。
+大切なファイルを編集するときは、元のファイルを別に残しておいてください。
+
+4. ファイルの扱い
+PDF工房 は、ファイルをインターネットに送信しません。すべての処理を、この PC の中で行います。
+Word・Excel・PowerPoint のファイルを PDF にするときは、この PC に入っている Microsoft Office（または LibreOffice）を使います。
+
+5. 商標
+Microsoft Office、Word、Excel、PowerPoint、Windows は、米国 Microsoft Corporation の商標です。
+PDF工房 は、これらの会社とは関係ありません。
+
+6. 連絡先
+Astras Group
+ウェブサイト：https://astras-tokushima.com/
+メール：info@astras-tokushima.com
+
+上の内容に同意する場合は「同意する」を選んで、次へ進んでください。

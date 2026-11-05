@@ -1,0 +1,33 @@
+﻿PDF工房 で使用しているソフトウェアとライセンス
+================================================
+
+PDF工房 本体は GNU Affero General Public License v3.0（AGPL-3.0）で公開しています。
+本文は agpl-3.0.txt（英語）にあります。
+
+PDF工房 には、次のソフトウェアが含まれています。各ライセンスの本文は、このフォルダにあります。
+
+| ソフトウェア | 用途 | ライセンス | 本文 |
+|---|---|---|---|
+| PyMuPDF / MuPDF（Artifex Software） | PDF の読み書き・変換 | AGPL-3.0 | agpl-3.0.txt |
+| Qt 6 / PySide6 / Shiboken6（The Qt Company） | 画面 | LGPL-3.0 | lgpl-3.0.txt, gpl-3.0.txt |
+| Python 3.14（Python Software Foundation） | 実行環境 | PSF License | Python.txt |
+| NumPy | 色ペンの書き込みの判別 | BSD-3-Clause ほか | numpy.txt |
+| Pillow | 画像の読み込み | MIT-CMU（HPND） | Pillow.txt |
+| psutil | 実行環境の補助 | BSD-3-Clause | psutil.txt |
+| PyYAML | 実行環境の補助 | MIT | PyYAML.txt |
+| OpenSSL 3 | 実行環境の補助 | Apache-2.0 | OpenSSL_Apache-2.0.txt |
+| PyInstaller（ブートローダー） | exe の起動部分 | GPL-2.0 と例外条項 | PyInstaller.txt |
+| Inno Setup（Jordan Russell, Martijn Laan） | インストーラー | Inno Setup License | InnoSetup.txt |
+| Microsoft Visual C++ ランタイム | 実行環境 | Microsoft の再頒布可能ファイルの条件による | — |
+
+Qt（LGPL-3.0）について
+- Qt のライブラリは、改変せずに別ファイル（DLL）として同梱しています。
+  インストール先の _internal\PySide6 フォルダにある DLL を、利用者が自分で差し替えることができます。
+- Qt のソースコードは https://download.qt.io/ から入手できます。
+
+PDF工房 のソースコードについて
+- 配布物に同梱の「PDF工房_ソースコード_<版>.zip」が、この版のソースコード一式です。
+- 同梱されていない場合は、Astras Group（info@astras-tokushima.com）にお問い合わせください。
+
+フォント
+- 日本語の文字は、Windows に入っているフォント（BIZ UDゴシックなど）を使っています。フォントは同梱していません。
