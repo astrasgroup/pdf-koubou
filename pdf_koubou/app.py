@@ -25,7 +25,7 @@ from .canvas import PageView
 from .thumbs import ThumbList
 
 APP_NAME = "PDF工房"
-VERSION = "1.3"
+VERSION = "1.4"
 _ver_counter = itertools.count(1)
 WINDOWS: list["MainWindow"] = []
 UNDO_LIMIT = 30
@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
         self.thumbs.setMinimumWidth(170)
         self.thumbs.currentRowChanged.connect(self._thumb_clicked)
         self.thumbs.pagesMoved.connect(self.move_pages)
+        self.thumbs.pagesCopied.connect(self.copy_pages)
         self.thumbs.filesDropped.connect(self.insert_files)
         self.thumbs.contextRequested.connect(self._thumb_menu)
 
@@ -176,6 +177,8 @@ class MainWindow(QMainWindow):
         self.a_crop_dlg = A("ページのトリミング…", self.crop_dialog, "Ctrl+Shift+T",
                             "上下左右の余白・ページ範囲・奇数／偶数ページを指定してトリミングします")
         self.a_del_pages = A("ページを削除", self.delete_pages, "Ctrl+D")
+        self.a_dup_pages = A("ページを複製", self.duplicate_pages, "Ctrl+Shift+D",
+                             "選んだページのコピーを、すぐ後ろに作ります（Ctrl を押しながらドラッグでも複製）")
         self.a_extract = A("ページを抽出…", self.extract_pages, "Ctrl+E")
         self.a_split = A("分割…", self.split_dialog)
         self.a_insert = A("PDF・画像を挿入（結合）…", self.insert_dialog, "Ctrl+I")
@@ -224,7 +227,7 @@ class MainWindow(QMainWindow):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu("ページ(&P)")
         for a in (self.a_rot_dlg, self.a_rot_r, self.a_rot_l, None, self.a_crop_dlg, self.a_uncrop, None,
-                  self.a_insert, self.a_blank, self.a_extract, self.a_split, self.a_del_pages):
+                  self.a_insert, self.a_blank, self.a_dup_pages, self.a_extract, self.a_split, self.a_del_pages):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu("ツール(&T)")
         for key, *_ in TOOLS:
@@ -363,7 +366,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{name}{mark} - {APP_NAME}" if name else APP_NAME)
         has = self.doc is not None
         for a in (self.a_save, self.a_saveas, self.a_print, self.a_rot_r, self.a_rot_l, self.a_rot_dlg,
-                  self.a_crop_dlg, self.a_del_pages,
+                  self.a_crop_dlg, self.a_del_pages, self.a_dup_pages,
                   self.a_extract, self.a_split, self.a_insert, self.a_blank, self.a_uncrop,
                   self.a_export_img, self.a_ink, self.a_del_ink, self.a_del_annots):
             a.setEnabled(has)
@@ -767,7 +770,8 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QMenu
         m = QMenu(self)
         for a in (self.a_rot_r, self.a_rot_l, self.a_rot_dlg, None, self.a_crop_dlg, None,
-                  self.a_extract, self.a_del_pages, None, self.a_insert, self.a_blank, None, self.a_export_img):
+                  self.a_dup_pages, self.a_extract, self.a_del_pages, None, self.a_insert, self.a_blank, None,
+                  self.a_export_img):
             m.addSeparator() if a is None else m.addAction(a)
         m.exec(self.thumbs.mapToGlobal(pos))
 
@@ -953,6 +957,45 @@ class MainWindow(QMainWindow):
             self.thumbs.item(k).setSelected(True)
         self.thumbs.blockSignals(False)
 
+    def select_rows(self, rows, show_first=True):
+        """一覧で rows を選び、最初のページを表示する。"""
+        if not rows:
+            return
+        if show_first:
+            self.goto(rows[0])
+        self.thumbs.blockSignals(True)
+        self.thumbs.clearSelection()
+        for k in rows:
+            if 0 <= k < self.thumbs.count():
+                self.thumbs.item(k).setSelected(True)
+        self.thumbs.blockSignals(False)
+        self.thumbs.scrollToItem(self.thumbs.item(rows[0]))
+
+    def copy_pages(self, rows, dest):
+        """rows のページのコピーを dest の位置に差し込む（書き込みも複製）。"""
+        if self.doc is None or not rows:
+            return
+        rows = sorted(set(rows))
+        self.harvest()
+        self.push_undo()
+        tmp = fitz.open()
+        for r in rows:
+            tmp.insert_pdf(self.doc, from_page=r, to_page=r)
+        at = dest if dest < len(self.doc) else -1
+        self.doc.insert_pdf(tmp, start_at=at)
+        pos = min(dest, len(self.overlays))
+        self.overlays[pos:pos] = [copy.deepcopy(self.overlays[r]) for r in rows]
+        self.doc_changed()
+        self.refresh_all()
+        self.select_rows(list(range(pos, pos + len(rows))))
+        self.statusBar().showMessage(f"{len(rows)} ページを複製しました。元に戻すには Ctrl+Z。", 4000)
+
+    def duplicate_pages(self):
+        if self.doc is None:
+            return
+        rows = self.target_rows()
+        self.copy_pages(rows, max(rows) + 1)
+
     def insert_files(self, paths, dest, snapshot=True):
         if self.doc is None:
             self.open_paths(paths)
@@ -964,6 +1007,7 @@ class MainWindow(QMainWindow):
         if snapshot:
             self.push_undo()
         added = 0
+        first = dest
         for p in paths:
             src = self.load_any(p)
             if src is None:
@@ -978,7 +1022,9 @@ class MainWindow(QMainWindow):
         if added:
             self.doc_changed()
             self.refresh_all()
-            self.statusBar().showMessage(f"{added} ページを結合しました。", 4000)
+            first = min(first, len(self.doc) - added)
+            self.select_rows(list(range(first, first + added)))
+            self.statusBar().showMessage(f"{added} ページを {first + 1} ページ目に挿入しました。元に戻すには Ctrl+Z。", 5000)
 
     def insert_dialog(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "挿入するファイル（PDF 以外は変換して挿入）", self.last_dir,
@@ -1477,7 +1523,8 @@ class MainWindow(QMainWindow):
             "■ ページ操作（左の一覧で選択。Ctrl / Shift で複数選択）\n"
             "・一覧の中でドラッグ → 並べ替え\n"
             "・一覧からデスクトップやフォルダへドラッグ → そのページだけの PDF ができます（抽出）\n"
-            "・ウィンドウを2つ開けば、ページを別の PDF へドラッグで移せます\n"
+            "・ウィンドウを2つ開けば、ページを別の PDF の好きな位置へドラッグで挿入できます（青い横線の位置に入ります）\n"
+            "・Ctrl を押しながら一覧の中でドラッグ → そのページを複製\n"
             "・右クリックで 回転・抽出・削除 など\n"
             "・「ページの回転」（Ctrl+Shift+R）・「ページのトリミング」（Ctrl+Shift+T）では、\n"
             "　ページ範囲と「奇数ページのみ」「偶数ページのみ」を指定できます\n\n"

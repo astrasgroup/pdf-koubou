@@ -2,7 +2,7 @@
 ; 作り方：build.bat で dist\PDFKoubou を作ってから、build_installer.bat を実行
 
 #define AppName "PDF工房"
-#define AppVersion "1.3"
+#define AppVersion "1.4"
 #define AppExe "PDFKoubou.exe"
 #define SrcDir "..\dist\PDFKoubou"
 
