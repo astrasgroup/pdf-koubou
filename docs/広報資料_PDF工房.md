@@ -20,12 +20,13 @@ AI に文章を書かせるときは、この資料をそのまま渡し、最�
 | 最新版 | 1.3（2026-11-06） |
 | 初公開 | 1.2（2026-11-05、GitHub で公開） |
 | ライセンス | AGPL-3.0（オープンソース。ソースコードを公開しています） |
-| ダウンロード | https://github.com/astrasgroup/pdf-koubou/releases |
+| ダウンロード | https://github.com/astrasgroup/pdf-koubou/releases/latest |
 | ソースコード | https://github.com/astrasgroup/pdf-koubou |
 | 問い合わせ | info@astras-tokushima.com ／ https://astras-tokushima.com/ |
 | 位置づけ | Astras-EDU（教育現場の教材・業務ツールを AI で内製化する取り組み）の一つ |
 
-> 公開前の確認：GitHub のダウンロードページは、2026-11-06 時点で **1.2** です。お知らせで 1.3 の機能（奇数・偶数ページの回転・トリミング）を紹介する場合は、先に 1.3 を GitHub に公開してください。
+> 1.3 は 2026-11-06 に GitHub で公開済みです（https://github.com/astrasgroup/pdf-koubou/releases/tag/v1.3 ）。
+> 上の「ダウンロード」の URL は、いつでも最新版のページを開きます。
 
 ---
 
