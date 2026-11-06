@@ -251,6 +251,45 @@ def set_crop(page: fitz.Page, x, y, w, h):
     page.set_cropbox(r)
 
 
+def crop_margins(page: fitz.Page, top, bottom, left, right):
+    """表示中の範囲から上下左右（表示の向き・pt）を切り取る。"""
+    W, H = page.rect.width, page.rect.height
+    set_crop(page, left, top, W - left - right, H - top - bottom)
+
+
+def content_margins(page: fitz.Page, pad=4.0, dpi=50):
+    """白い余白の幅 (上, 下, 左, 右) を表示座標の pt で返す。中身がなければ None。"""
+    import numpy as np
+    pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csGRAY, annots=True)
+    a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.stride)[:, :pix.width]
+    ink = a < 235
+    rows = np.where(ink.any(axis=1))[0]
+    cols = np.where(ink.any(axis=0))[0]
+    if len(rows) == 0 or len(cols) == 0:
+        return None
+    s = 72 / dpi
+    W, H = page.rect.width, page.rect.height
+    top = max(0.0, rows[0] * s - pad)
+    bottom = max(0.0, H - (rows[-1] + 1) * s - pad)
+    left = max(0.0, cols[0] * s - pad)
+    right = max(0.0, W - (cols[-1] + 1) * s - pad)
+    return (float(top), float(bottom), float(left), float(right))
+
+
+def uncrop_page(page: fitz.Page):
+    """トリミングを解除。戻した後の表示座標で、元の表示範囲の左上がどこに来るか (dx, dy) を返す。"""
+    old = page.cropbox
+    if old == page.mediabox:
+        return None
+    # 解除前の表示範囲の4隅（回転前の座標）を覚え、解除後の表示座標に直す
+    corners = [fitz.Point(old.x0, old.y0), fitz.Point(old.x1, old.y0),
+               fitz.Point(old.x0, old.y1), fitz.Point(old.x1, old.y1)]
+    page.set_cropbox(page.mediabox)
+    mb = page.mediabox
+    pts = [fitz.Point(c.x - mb.x0, c.y - mb.y0) * page.rotation_matrix for c in corners]
+    return (min(p.x for p in pts), min(p.y for p in pts))
+
+
 # ---------------------------------------------------------------- 書き込みの座標変換
 def transform_record(rec: dict, fn) -> dict:
     """fn(x, y) -> (x', y') で書き込みを移す（回転・トリミング時）。文字と画像は向きを保つ。"""

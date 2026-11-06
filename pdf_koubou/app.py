@@ -20,12 +20,12 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QColorDialog, QComboB
                                QToolButton,
                                QVBoxLayout, QWidget)
 
-from . import convert, pdfcore, theme
+from . import convert, pagedialogs, pdfcore, theme
 from .canvas import PageView
 from .thumbs import ThumbList
 
 APP_NAME = "PDF工房"
-VERSION = "1.2"
+VERSION = "1.3"
 _ver_counter = itertools.count(1)
 WINDOWS: list["MainWindow"] = []
 UNDO_LIMIT = 30
@@ -170,7 +170,11 @@ class MainWindow(QMainWindow):
         self.a_redo = A("やり直し", self.redo, "Ctrl+Y")
         self.a_del_overlay = A("選んだ書き込みを削除", lambda: self.view.delete_selected())
         self.a_rot_r = A("右に回転", lambda: self.rotate_pages(90), "Ctrl+R")
-        self.a_rot_l = A("左に回転", lambda: self.rotate_pages(-90), "Ctrl+Shift+R")
+        self.a_rot_l = A("左に回転", lambda: self.rotate_pages(-90), "Ctrl+L")
+        self.a_rot_dlg = A("ページの回転…", self.rotate_dialog, "Ctrl+Shift+R",
+                           "方向・ページ範囲・奇数／偶数ページを指定して回転します")
+        self.a_crop_dlg = A("ページのトリミング…", self.crop_dialog, "Ctrl+Shift+T",
+                            "上下左右の余白・ページ範囲・奇数／偶数ページを指定してトリミングします")
         self.a_del_pages = A("ページを削除", self.delete_pages, "Ctrl+D")
         self.a_extract = A("ページを抽出…", self.extract_pages, "Ctrl+E")
         self.a_split = A("分割…", self.split_dialog)
@@ -219,8 +223,8 @@ class MainWindow(QMainWindow):
         for a in (self.a_undo, self.a_redo, None, self.a_del_overlay):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu("ページ(&P)")
-        for a in (self.a_rot_r, self.a_rot_l, None, self.a_insert, self.a_blank, self.a_extract,
-                  self.a_split, self.a_del_pages, None, self.a_uncrop):
+        for a in (self.a_rot_dlg, self.a_rot_r, self.a_rot_l, None, self.a_crop_dlg, self.a_uncrop, None,
+                  self.a_insert, self.a_blank, self.a_extract, self.a_split, self.a_del_pages):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu("ツール(&T)")
         for key, *_ in TOOLS:
@@ -358,7 +362,8 @@ class MainWindow(QMainWindow):
         mark = " *" if self.modified else ""
         self.setWindowTitle(f"{name}{mark} - {APP_NAME}" if name else APP_NAME)
         has = self.doc is not None
-        for a in (self.a_save, self.a_saveas, self.a_print, self.a_rot_r, self.a_rot_l, self.a_del_pages,
+        for a in (self.a_save, self.a_saveas, self.a_print, self.a_rot_r, self.a_rot_l, self.a_rot_dlg,
+                  self.a_crop_dlg, self.a_del_pages,
                   self.a_extract, self.a_split, self.a_insert, self.a_blank, self.a_uncrop,
                   self.a_export_img, self.a_ink, self.a_del_ink, self.a_del_annots):
             a.setEnabled(has)
@@ -761,8 +766,8 @@ class MainWindow(QMainWindow):
             return
         from PySide6.QtWidgets import QMenu
         m = QMenu(self)
-        for a in (self.a_rot_r, self.a_rot_l, None, self.a_extract, self.a_del_pages, None,
-                  self.a_insert, self.a_blank, None, self.a_export_img):
+        for a in (self.a_rot_r, self.a_rot_l, self.a_rot_dlg, None, self.a_crop_dlg, None,
+                  self.a_extract, self.a_del_pages, None, self.a_insert, self.a_blank, None, self.a_export_img):
             m.addSeparator() if a is None else m.addAction(a)
         m.exec(self.thumbs.mapToGlobal(pos))
 
@@ -829,21 +834,89 @@ class MainWindow(QMainWindow):
         rows = self.thumbs.selected_rows()
         return rows if rows else [self.cur]
 
-    def rotate_pages(self, deg):
+    def rotate_pages(self, deg, rows=None):
         if self.doc is None:
             return
-        rows = self.target_rows()
+        if rows is None:
+            rows = self.target_rows()
+        if not rows:
+            return
+        self.harvest()
         self.push_undo()
         for r in rows:
             page = self.doc[r]
             W, H = page.rect.width, page.rect.height
-            fn = (lambda x, y, H=H: (H - y, x)) if deg == 90 else (lambda x, y, W=W: (y, W - x))
+            if deg == 90:
+                fn = lambda x, y, H=H: (H - y, x)
+            elif deg == 180:
+                fn = lambda x, y, W=W, H=H: (W - x, H - y)
+            else:
+                fn = lambda x, y, W=W: (y, W - x)
             self.overlays[r] = [pdfcore.transform_record(rec, fn) for rec in self.overlays[r]]
             page.set_rotation((page.rotation + deg) % 360)
         self.doc_changed()
         for r in rows:
             self.refresh_thumb(r)
         self.render_page(harvest=False)
+        return len(rows)
+
+    def _page_sizes(self):
+        return [(pg.rect.width, pg.rect.height) for pg in self.doc]
+
+    def rotate_dialog(self):
+        if self.doc is None:
+            return
+        dlg = pagedialogs.RotateDialog(len(self.doc), self.cur, self.thumbs.selected_rows(),
+                                       self._page_sizes(), self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        rows = dlg.rows()
+        n = self.rotate_pages(dlg.direction(), rows)
+        if n:
+            self.statusBar().showMessage(f"{n} ページを回転しました。元に戻すには Ctrl+Z。", 5000)
+
+    def crop_dialog(self, init_rect: QRectF | None = None):
+        if self.doc is None:
+            return
+        self.harvest()
+        page = self.doc[self.cur]
+        W, H = page.rect.width, page.rect.height
+        init = None
+        if init_rect is not None:
+            r = init_rect.intersected(QRectF(0, 0, W, H))
+            init = (r.top(), H - r.bottom(), r.left(), W - r.right())
+        pix = page.get_pixmap(matrix=fitz.Matrix(0.6, 0.6), annots=True)
+        preview = QPixmap.fromImage(pix_to_qimage(pix))
+        try:
+            auto = pdfcore.content_margins(page)
+        except Exception:
+            auto = None
+        dlg = pagedialogs.CropDialog(len(self.doc), self.cur, self.thumbs.selected_rows(), W, H, preview,
+                                     auto_margins=auto, init_margins=init, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        top, bottom, left, right = dlg.margins_pt()
+        rows = dlg.rows()
+        if not rows or (top, bottom, left, right) == (0, 0, 0, 0):
+            return
+        self.push_undo()
+        done, skipped = 0, 0
+        for r in rows:
+            pg = self.doc[r]
+            try:
+                pdfcore.crop_margins(pg, top, bottom, left, right)
+            except ValueError:
+                skipped += 1
+                continue
+            done += 1
+            self.overlays[r] = [pdfcore.transform_record(rec, lambda x, y: (x - left, y - top))
+                                for rec in self.overlays[r]]
+        self.doc_changed()
+        self.refresh_all()
+        msg = f"{done} ページをトリミングしました。"
+        if skipped:
+            msg += f"（{skipped} ページは小さすぎるため見送り）"
+        self.statusBar().showMessage(msg + "元に戻すには Ctrl+Z。", 6000)
 
     def delete_pages(self):
         if self.doc is None:
@@ -1040,24 +1113,26 @@ class MainWindow(QMainWindow):
                 os.startfile(out_dir)
 
     def uncrop(self):
-        r = QMessageBox.question(self, APP_NAME, "すべてのページのトリミングを解除して、元の大きさに戻しますか？")
-        if r != QMessageBox.StandardButton.Yes:
+        if self.doc is None:
             return
+        dlg = pagedialogs.UncropDialog(len(self.doc), self.cur, self.thumbs.selected_rows(), self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.harvest()
         self.push_undo()
-        for i, page in enumerate(self.doc):
-            cb = page.cropbox
-            if cb != page.mediabox:
-                # 表示座標のずれを補正
-                old = page.rect
-                page.set_cropbox(page.mediabox)
-                dx, dy = cb.x0 - page.cropbox.x0, cb.y0 - page.cropbox.y0
-                rot = page.rotation
-                # 回転なしの場合のみ正確に補正（回転ありは概算）
-                if rot == 0:
-                    self.overlays[i] = [pdfcore.transform_record(rec, lambda x, y: (x + dx, y + dy))
-                                        for rec in self.overlays[i]]
+        n = 0
+        for i in dlg.rows():
+            off = pdfcore.uncrop_page(self.doc[i])
+            if off is None:
+                continue
+            n += 1
+            dx, dy = off
+            self.overlays[i] = [pdfcore.transform_record(rec, lambda x, y: (x + dx, y + dy))
+                                for rec in self.overlays[i]]
         self.doc_changed()
         self.refresh_all()
+        self.statusBar().showMessage(f"{n} ページのトリミングを解除しました。" if n
+                                     else "トリミングされたページはありませんでした。", 5000)
 
     # ================================================================ 範囲操作（消去・トリミング）
     def _region_chosen(self, tool, rect: QRectF, poly):
@@ -1121,40 +1196,7 @@ class MainWindow(QMainWindow):
         self.refresh_thumb(self.cur)
 
     def _crop(self, rect: QRectF):
-        box = QMessageBox(self)
-        box.setWindowTitle("トリミング")
-        box.setText("囲んだ範囲だけを残します。どのページに適用しますか？")
-        b_this = box.addButton("このページ", QMessageBox.ButtonRole.AcceptRole)
-        b_sel = box.addButton("選択中のページ", QMessageBox.ButtonRole.ActionRole) \
-            if len(self.thumbs.selected_rows()) > 1 else None
-        b_all = box.addButton("すべてのページ", QMessageBox.ButtonRole.ActionRole)
-        box.addButton("キャンセル", QMessageBox.ButtonRole.RejectRole)
-        box.exec()
-        c = box.clickedButton()
-        if c is b_this:
-            rows = [self.cur]
-        elif b_sel is not None and c is b_sel:
-            rows = self.thumbs.selected_rows()
-        elif c is b_all:
-            rows = list(range(len(self.doc)))
-        else:
-            return
-        self.push_undo()
-        errors = 0
-        for r in rows:
-            page = self.doc[r]
-            try:
-                pdfcore.set_crop(page, rect.x(), rect.y(), rect.width(), rect.height())
-            except ValueError:
-                errors += 1
-                continue
-            dx, dy = max(0.0, rect.x()), max(0.0, rect.y())
-            self.overlays[r] = [pdfcore.transform_record(rec, lambda x, y: (x - dx, y - dy))
-                                for rec in self.overlays[r]]
-        self.doc_changed()
-        self.refresh_all()
-        msg = f"{len(rows) - errors} ページをトリミングしました。解除は「ページ」メニューから。"
-        self.statusBar().showMessage(msg, 5000)
+        return self.crop_dialog(rect)
 
     # ================================================================ 消去メニュー
     def _scope_dialog(self, title, extra=None):
@@ -1436,7 +1478,9 @@ class MainWindow(QMainWindow):
             "・一覧の中でドラッグ → 並べ替え\n"
             "・一覧からデスクトップやフォルダへドラッグ → そのページだけの PDF ができます（抽出）\n"
             "・ウィンドウを2つ開けば、ページを別の PDF へドラッグで移せます\n"
-            "・右クリックで 回転・抽出・削除 など\n\n"
+            "・右クリックで 回転・抽出・削除 など\n"
+            "・「ページの回転」（Ctrl+Shift+R）・「ページのトリミング」（Ctrl+Shift+T）では、\n"
+            "　ページ範囲と「奇数ページのみ」「偶数ページのみ」を指定できます\n\n"
             "■ 書き込み\n"
             "・テキスト（T）：クリックした場所にそのまま入力。外をクリックで確定\n"
             "・選択（V）：書き込みを動かす・Delete で削除・ダブルクリックで文字を修正\n"
